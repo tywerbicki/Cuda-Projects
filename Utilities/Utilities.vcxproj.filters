@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Cuda">
+      <UniqueIdentifier>{637710f5-c79e-4ce3-bc2f-9655d9676847}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda\Header Files">
+      <UniqueIdentifier>{edd22de1-39ab-415e-8b49-5de6a8176d57}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda\Source Files">
+      <UniqueIdentifier>{f153f7f2-2f69-492f-a124-e4b1dce6b9a9}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
