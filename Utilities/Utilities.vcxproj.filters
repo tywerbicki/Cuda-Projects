@@ -15,4 +15,14 @@
       <UniqueIdentifier>{f153f7f2-2f69-492f-a124-e4b1dce6b9a9}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="debug.h">
+      <Filter>Cuda\Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="debug.cpp">
+      <Filter>Cuda\Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
 </Project>
