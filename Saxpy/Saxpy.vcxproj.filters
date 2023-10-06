@@ -7,10 +7,18 @@
     <Filter Include="Source Files">
       <UniqueIdentifier>{b3cfe8b8-9bda-4cc6-a190-a2c125b517ea}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{ca5c8bd0-c4a6-4ea8-a412-08dfaf635711}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="saxpy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
