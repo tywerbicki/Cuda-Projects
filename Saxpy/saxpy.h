@@ -11,4 +11,10 @@ namespace saxpy
                             float                  a,
                             std::span<const float> x,
                             std::span<float>       y);
+
+    void DeviceExecute(cudaStream_t stream,
+                       size_t       len,
+                       float        a,
+                       const float* pXDevice,
+                       float*       pYDevice);
 }

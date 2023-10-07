@@ -11,8 +11,8 @@
 
 void FillXY(const std::span<float> x, const std::span<float> y)
 {
-    std::fill(x.begin(), x.end(), 1.0f);
-    std::fill(y.begin(), y.end(), 2.0f);
+    std::fill(x.begin(), x.end(), 2.0f);
+    std::fill(y.begin(), y.end(), 1.0f);
 }
 
 
@@ -22,7 +22,8 @@ int main()
     int32_t        deviceCount              = 0;
     int32_t        selectedDevice           = -1;
     cudaDeviceProp selectedDeviceProperties = {};
-    cudaStream_t   stream                   = nullptr;
+    cudaStream_t   saxpyStream              = nullptr;
+    cudaEvent_t    saxpyComplete            = nullptr;
 
     result = cudaGetDeviceCount(&deviceCount);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -42,7 +43,10 @@ int main()
     result = cudaGetDeviceProperties(&selectedDeviceProperties, selectedDevice);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-    result = cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+    result = cudaStreamCreateWithFlags(&saxpyStream, cudaStreamNonBlocking);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    result = cudaEventCreate(&saxpyComplete);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
     const float      a           = 3.0;
@@ -89,11 +93,28 @@ int main()
         result = cudaMalloc(&pYDevice, sizeInBytes);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        result = cudaMemcpyAsync(pXDevice, pXHost, sizeInBytes, cudaMemcpyHostToDevice, stream);
+        result = cudaMemcpyAsync(pXDevice, pXHost, sizeInBytes, cudaMemcpyHostToDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        result = cudaMemcpyAsync(pYDevice, pYHost, sizeInBytes, cudaMemcpyHostToDevice, stream);
+        result = cudaMemcpyAsync(pYDevice, pYHost, sizeInBytes, cudaMemcpyHostToDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
+
+        result = cudaMemcpyAsync(pYHost, pYDevice, sizeInBytes, cudaMemcpyDeviceToHost, saxpyStream);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        result = cudaEventRecord(saxpyComplete, saxpyStream);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        result = cudaEventSynchronize(saxpyComplete);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        for (size_t i = 0; i < size; i++)
+        {
+            std::cout << pYHost[i] << " ";
+        }
+        std::cout << std::endl;
     }
 
     

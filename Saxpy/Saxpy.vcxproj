@@ -91,6 +91,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="saxpy.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
