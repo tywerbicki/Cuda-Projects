@@ -24,5 +24,7 @@ void saxpy::DeviceExecute(const cudaStream_t stream,
                           const float* const pXDevice,
                           float*       const pYDevice)
 {
+    // TODO: properly select thread grid size.
+
     SaxpyCuKernel<<<256, 5, 0, stream>>>(len, a, pXDevice, pYDevice);
 }

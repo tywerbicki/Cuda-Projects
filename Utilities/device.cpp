@@ -10,14 +10,16 @@ cudaError_t device::GetMostMultiProcessors(const int32_t deviceCount,
 
     for (int32_t device = 0; device < deviceCount; device++)
     {
-        cudaDeviceProp deviceProperties = {};
+        int multiProcessorCount = 0;
+        result                  = cudaDeviceGetAttribute(&multiProcessorCount,
+                                                         cudaDevAttrMultiProcessorCount,
+                                                         device);
 
-        result = cudaGetDeviceProperties(&deviceProperties, device);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        if (deviceProperties.multiProcessorCount > maxMultiProcessorCount)
+        if (multiProcessorCount > maxMultiProcessorCount)
         {
-            maxMultiProcessorCount = deviceProperties.multiProcessorCount;
+            maxMultiProcessorCount = multiProcessorCount;
             selectedDevice         = device;
         }
     }
