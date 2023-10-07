@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <span>
 #include <stdint.h>
 
 #include "cuda_runtime.h"
@@ -7,13 +6,6 @@
 #include "debug.h"
 #include "device.h"
 #include "saxpy.h"
-
-
-void FillXY(const std::span<float> x, const std::span<float> y)
-{
-    std::fill(x.begin(), x.end(), 2.0f);
-    std::fill(y.begin(), y.end(), 1.0f);
-}
 
 
 int main()
@@ -59,33 +51,36 @@ int main()
 
     if (selectedDeviceProperties.integrated && selectedDeviceProperties.canMapHostMemory)
     {
-        result = cudaHostAlloc(&pXHost,
-                               sizeInBytes,
-                               cudaHostAllocMapped | cudaHostAllocWriteCombined);
+        // If the device is integrated and supports mapped host memory, then we use pinned
+        // mapped allocations to entirely remove any copying from host to device and vice versa.
 
+        result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocMapped | cudaHostAllocWriteCombined);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        result = cudaHostAlloc(&pYHost,
-                               sizeInBytes,
-                               cudaHostAllocMapped);
-
+        result = cudaHostAlloc(&pYHost, sizeInBytes, cudaHostAllocMapped);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        std::fill(pXHost, pXHost + size, 3.0f);
+        std::fill(pYHost, pYHost + size, 1.5f);
+
+        result = cudaHostGetDevicePointer(&pXDevice, pXHost, 0);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        result = cudaHostGetDevicePointer(&pYDevice, pYHost, 0);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
     }
     else
     {
-        result = cudaHostAlloc(&pXHost,
-                               sizeInBytes,
-                               cudaHostAllocDefault);
-
+        result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocDefault);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        result = cudaHostAlloc(&pYHost,
-                               sizeInBytes,
-                               cudaHostAllocDefault);
-
+        result = cudaHostAlloc(&pYHost, sizeInBytes, cudaHostAllocDefault);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        FillXY({pXHost, size}, {pYHost, size});
+        std::fill(pXHost, pXHost + size, 2.0f);
+        std::fill(pYHost, pYHost + size, 1.5f);
 
         result = cudaMalloc(&pXDevice, sizeInBytes);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -103,21 +98,19 @@ int main()
 
         result = cudaMemcpyAsync(pYHost, pYDevice, sizeInBytes, cudaMemcpyDeviceToHost, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
-
-        result = cudaEventRecord(saxpyComplete, saxpyStream);
-        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
-
-        result = cudaEventSynchronize(saxpyComplete);
-        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
-
-        for (size_t i = 0; i < size; i++)
-        {
-            std::cout << pYHost[i] << " ";
-        }
-        std::cout << std::endl;
     }
 
-    
+    result = cudaEventRecord(saxpyComplete, saxpyStream);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    result = cudaEventSynchronize(saxpyComplete);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    for (size_t i = 0; i < size; i++)
+    {
+        std::cout << pYHost[i] << " ";
+    }
+    std::cout << std::endl;
 
     return cudaSuccess;
 }
