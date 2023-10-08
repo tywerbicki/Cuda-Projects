@@ -61,7 +61,7 @@ int main()
     {
         // If the device is integrated and supports mapped host memory, then we use pinned
         // mapped allocations to entirely remove any copying from host to device and vice versa.
-        DBG_MSG_STD_OUT("Mapped memory allocation strategy chosen.");
+        DBG_MSG_STD_OUT("Mapped memory allocation strategy chosen");
 
         result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocMapped | cudaHostAllocWriteCombined);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -83,7 +83,7 @@ int main()
     else
     {
         // If the device is discrete, we will do everything asynchronously with respect to the host.
-        DBG_MSG_STD_OUT("Async memory allocation strategy chosen.");
+        DBG_MSG_STD_OUT("Async memory allocation strategy chosen");
 
         result = cudaMallocAsync(&pXDevice, sizeInBytes, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);

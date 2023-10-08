@@ -3,19 +3,19 @@
 
 namespace saxpy
 {
-	enum class MemoryStrategy
-	{
-		dynamic,
-		forceMapped,
-		forceAsync
-	};
+    enum class MemoryStrategy
+    {
+        dynamic,
+        forceMapped,
+        forceAsync
+    };
 
-	namespace settings
-	{
+    namespace settings
+    {
 #ifdef _DEBUG
-		inline extern const MemoryStrategy memoryStrategy = MemoryStrategy::dynamic;
+        inline extern const MemoryStrategy memoryStrategy = MemoryStrategy::dynamic;
 #else // _DEBUG
-		inline extern const MemoryStrategy memoryStrategy = MemoryStrategy::dynamic;
+        inline extern const MemoryStrategy memoryStrategy = MemoryStrategy::dynamic;
 #endif // _DEBUG
-	}
+    }
 }
