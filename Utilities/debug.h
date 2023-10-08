@@ -12,6 +12,9 @@
 
 #ifdef _DEBUG
 
+#define DBG_MSG_STD_OUT(...) debug::DisplayMessage(std::cout, "DEBUG MESSAGE", __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
+#define DBG_MSG_STD_ERR(...) debug::DisplayMessage(std::cerr, "DEBUG ERROR"  , __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
+
 #define DBG_PRINT_RETURN_ON_CUDA_ERROR(result) if ((result) != cudaSuccess) \
                                                { \
                                                    debug::DisplayCudaError(result, __FILE__, __FUNCTION__, __LINE__); \
@@ -19,6 +22,9 @@
                                                }
 
 #else // _DEBUG
+
+#define DBG_MSG_STD_OUT(...)
+#define DBG_MSG_STD_ERR(...)
 
 #define DBG_PRINT_RETURN_ON_CUDA_ERROR(result) if ((result) != cudaSuccess) return result
 

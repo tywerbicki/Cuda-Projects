@@ -49,7 +49,7 @@ int main()
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
     const float      a           = 3.0;
-    constexpr size_t size        = 10;
+    constexpr size_t size        = 1000;
     constexpr size_t sizeInBytes = size * sizeof(float);
     float*           pXHost      = nullptr;
     float*           pYHost      = nullptr;
@@ -61,8 +61,7 @@ int main()
     {
         // If the device is integrated and supports mapped host memory, then we use pinned
         // mapped allocations to entirely remove any copying from host to device and vice versa.
-
-        // TODO: add debug message for memory strategy chosen.
+        DBG_MSG_STD_OUT("Mapped memory allocation strategy chosen.");
 
         result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocMapped | cudaHostAllocWriteCombined);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -84,6 +83,7 @@ int main()
     else
     {
         // If the device is discrete, we will do everything asynchronously with respect to the host.
+        DBG_MSG_STD_OUT("Async memory allocation strategy chosen.");
 
         result = cudaMallocAsync(&pXDevice, sizeInBytes, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -91,7 +91,7 @@ int main()
         result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocDefault);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        std::fill(pXHost, pXHost + size, 5.0f);
+        std::fill(pXHost, pXHost + size, 4.0f);
 
         result = cudaMemcpyAsync(pXDevice, pXHost, sizeInBytes, cudaMemcpyHostToDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -125,6 +125,7 @@ int main()
     result = cudaEventSynchronize(saxpyComplete);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
+    // TODO: replace this with a std::equal
     for (size_t i = 0; i < size; i++)
     {
         std::cout << pYHost[i] << " ";
