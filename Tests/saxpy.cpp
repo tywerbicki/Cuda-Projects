@@ -8,10 +8,10 @@
 class SaxpyTest : public ::testing::Test
 {
 protected:
-	// Per-test-suite set-up.
-	static void SetUpTestSuite()
-	{
-		cudaError_t result      = cudaSuccess;
+    // Per-test-suite set-up.
+    static void SetUpTestSuite()
+    {
+        cudaError_t result      = cudaSuccess;
         int         deviceCount = -1;
 
         result = cudaGetDeviceCount(&deviceCount);
@@ -23,7 +23,7 @@ protected:
 
         result = cudaSetDevice(s_selectedDevice);
         ASSERT_EQ(result, cudaSuccess);
-	}
+    }
 
     // Per-test-suite tear-down.
     static void TearDownTestSuite()
@@ -58,8 +58,8 @@ protected:
         ASSERT_EQ(result, cudaSuccess);
     }
 
-	// Device that is used for all tests.
-	static int s_selectedDevice;
+    // Device that is used for all tests.
+    static int s_selectedDevice;
 
     // Resources that are created and destroyed for each test.
     cudaStream_t m_saxpyStream;
