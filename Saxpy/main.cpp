@@ -132,6 +132,7 @@ int main()
     }
     std::cout << std::endl;
 
+    // TODO: only print errors here. Don't return.
     result = cudaFreeHost(pXHost);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
     result = cudaFreeHost(pYHost);
