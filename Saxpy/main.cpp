@@ -9,7 +9,7 @@
 #include "settings.h"
 
 
-int main()
+int mainlol()
 {
     cudaError_t result         = cudaSuccess;
     int32_t     deviceCount    = -1;
