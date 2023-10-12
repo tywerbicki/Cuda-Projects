@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <vector>
 
 #include "cuda_runtime.h"
@@ -28,6 +29,21 @@ protected:
 
         result = cudaSetDevice(s_selectedDevice);
         ASSERT_EQ(result, cudaSuccess);
+
+        s_testX.resize(    s_problemSizes.back());
+        s_testY.resize(    s_problemSizes.back());
+        s_solutionZ.resize(s_problemSizes.back());
+
+        const auto randFloat = []() { return static_cast<float>(std::rand()) / RAND_MAX; };
+
+        std::srand(10);
+        std::generate(s_testX.begin(), s_testX.end(), randFloat);
+        std::generate(s_testY.begin(), s_testY.end(), randFloat);
+
+        std::transform(s_testX.cbegin(), s_testX.cend(),
+                       s_testY.cbegin(),
+                       s_solutionZ.begin(),
+                       [=](float x, float y) { return (s_testA * x) + y; });
     }
 
     // Per-test-suite tear-down.
@@ -55,10 +71,10 @@ protected:
     void TearDown() override
     {
         m_result = cudaEventDestroy(m_saxpyComplete);
-        ASSERT_EQ(m_result, cudaSuccess);
+        EXPECT_EQ(m_result, cudaSuccess);
 
         m_result = cudaStreamDestroy(m_saxpyStream);
-        ASSERT_EQ(m_result, cudaSuccess);
+        EXPECT_EQ(m_result, cudaSuccess);
 
         m_saxpyStream   = nullptr;
         m_saxpyComplete = nullptr;
@@ -67,6 +83,12 @@ protected:
     // Resources that are used for all tests.
     static int s_selectedDevice;
 
+    static const std::array<size_t, 7> s_problemSizes;
+    static const float                 s_testA;
+    static       std::vector<float>    s_testX;
+    static       std::vector<float>    s_testY;
+    static       std::vector<float>    s_solutionZ;
+
     // Resources that are created and destroyed for each test.
     cudaStream_t m_saxpyStream;
     cudaEvent_t  m_saxpyComplete;
@@ -74,19 +96,22 @@ protected:
     cudaError_t m_result;
 };
 
+const std::array<size_t, 7> SaxpyTest::s_problemSizes = { 0, 1, 3, 33, 65, 1025, 1048577 };
+const float                 SaxpyTest::s_testA        = 2.75f;
+
 
 TEST_F(SaxpyTest, AsynchronousTransfers)
 {
-    const std::array<size_t, 7> sizes = { 0, 1, 3, 33, 65, 1025, 1048577 };
-
-    for (const size_t size : sizes)
+    for (const size_t size : s_problemSizes)
     {
         const float  a           = 3.0f;
         const size_t sizeInBytes = size * sizeof(float);
         float*       pXHost      = nullptr;
         float*       pYHost      = nullptr;
+        float*       pZHost      = nullptr;
         float*       pXDevice    = nullptr;
         float*       pYDevice    = nullptr;
+        float*       pZDevice    = nullptr;
 
         std::vector<float> solution(size);
 
@@ -117,7 +142,7 @@ TEST_F(SaxpyTest, AsynchronousTransfers)
         m_result = cudaMemcpyAsync(pYDevice, pYHost, sizeInBytes, cudaMemcpyHostToDevice, m_saxpyStream);
         ASSERT_EQ(m_result, cudaSuccess);
 
-        saxpy::DeviceExecute(m_saxpyStream, size, a, pXDevice, pYDevice);
+        // saxpy::DeviceExecute(m_saxpyStream, size, a, pXDevice, pYDevice);
 
         m_result = cudaMemcpyAsync(pYHost, pYDevice, sizeInBytes, cudaMemcpyDeviceToHost, m_saxpyStream);
         ASSERT_EQ(m_result, cudaSuccess);

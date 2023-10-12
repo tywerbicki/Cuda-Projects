@@ -5,9 +5,10 @@
 
 namespace saxpy
 {
-    void DeviceExecute(cudaStream_t stream,
-                       size_t       len,
-                       float        a,
-                       const float* pXDevice,
-                       float*       pYDevice);
+    void DeviceExecute(      float        a,
+                       const float*       pXDevice,
+                       const float*       pYDevice,
+                             float*       pZDevice,
+                             size_t       len,
+                             cudaStream_t stream);
 }

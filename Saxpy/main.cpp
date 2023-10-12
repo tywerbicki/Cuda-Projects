@@ -78,7 +78,7 @@ int mainlol()
         result = cudaHostGetDevicePointer(&pYDevice, pYHost, 0);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
+        // saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
     }
     else
     {
@@ -107,7 +107,7 @@ int mainlol()
         result = cudaMemcpyAsync(pYDevice, pYHost, sizeInBytes, cudaMemcpyHostToDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
+        // saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
 
         result = cudaMemcpyAsync(pYHost, pYDevice, sizeInBytes, cudaMemcpyDeviceToHost, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
