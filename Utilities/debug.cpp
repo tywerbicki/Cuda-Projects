@@ -1,12 +1,10 @@
-#include <iostream>
-
 #include "debug.h"
 
 
 void debug::DisplayCudaError(const cudaError_t      error,
                              const std::string_view fileName,
                              const std::string_view callerName,
-                             const uint32_t         lineNumber)
+                             const unsigned int     lineNumber)
 {
     std::cerr << "\nCUDA ERROR\n";
 

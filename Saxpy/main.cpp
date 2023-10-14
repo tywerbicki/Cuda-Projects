@@ -1,19 +1,21 @@
-#include <algorithm>
-#include <stdint.h>
-
-#include "cuda_runtime.h"
-
 #include "debug.h"
 #include "device.h"
 #include "saxpy.h"
 #include "settings.h"
 
+#include "cuda_runtime.h"
 
-int mainlol()
+#include <stdlib.h>
+
+#include <algorithm>
+#include <vector>
+
+
+int main()
 {
     cudaError_t result         = cudaSuccess;
-    int32_t     deviceCount    = -1;
-    int32_t     selectedDevice = -1;
+    int         deviceCount    = -1;
+    int         selectedDevice = -1;
 
     result = cudaGetDeviceCount(&deviceCount);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -30,8 +32,8 @@ int mainlol()
     result = cudaSetDevice(selectedDevice);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-    int32_t deviceIsIntegrated     = -1;
-    int32_t deviceCanMapHostMemory = -1;
+    int deviceIsIntegrated     = -1;
+    int deviceCanMapHostMemory = -1;
 
     result = cudaDeviceGetAttribute(&deviceIsIntegrated, cudaDevAttrIntegrated, selectedDevice);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -48,13 +50,20 @@ int mainlol()
     result = cudaEventCreate(&saxpyComplete);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-    const float      a           = 3.0;
-    constexpr size_t size        = 1000;
-    constexpr size_t sizeInBytes = size * sizeof(float);
-    float*           pXHost      = nullptr;
-    float*           pYHost      = nullptr;
-    float*           pXDevice    = nullptr;
-    float*           pYDevice    = nullptr;
+    std::srand(10);
+    const auto randFloat = []() { return static_cast<float>(std::rand()); };
+
+    const float  a           = 2.75f;
+    float*       pXHost      = nullptr;
+    float*       pYHost      = nullptr;
+    float*       pZHost      = nullptr;
+    float*       pXDevice    = nullptr;
+    float*       pYDevice    = nullptr;
+    float*       pZDevice    = nullptr;
+    const size_t size        = 1000000;
+    const size_t sizeInBytes = size * sizeof(float);
+
+    std::vector<float> solution(size);
 
     if (saxpy::settings::memoryStrategy == saxpy::MemoryStrategy::forceMapped ||
         (deviceIsIntegrated && deviceCanMapHostMemory)                          )
@@ -91,7 +100,7 @@ int mainlol()
         result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocDefault);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        std::fill(pXHost, pXHost + size, 4.0f);
+        std::generate(pXHost, pXHost + size, randFloat);
 
         result = cudaMemcpyAsync(pXDevice, pXHost, sizeInBytes, cudaMemcpyHostToDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -102,20 +111,30 @@ int mainlol()
         result = cudaHostAlloc(&pYHost, sizeInBytes, cudaHostAllocDefault);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        std::fill(pYHost, pYHost + size, 1.5f);
+        std::generate(pYHost, pYHost + size, randFloat);
 
         result = cudaMemcpyAsync(pYDevice, pYHost, sizeInBytes, cudaMemcpyHostToDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        // saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
+        result = cudaMallocAsync(&pZDevice, sizeInBytes, saxpyStream);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        result = cudaMemcpyAsync(pYHost, pYDevice, sizeInBytes, cudaMemcpyDeviceToHost, saxpyStream);
+        saxpy::DeviceExecute(a, pXDevice, pYDevice, pZDevice, size, saxpyStream);
+
+        result = cudaHostAlloc(&pZHost, sizeInBytes, cudaHostAllocDefault);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        result = cudaMemcpyAsync(pZHost, pZDevice, sizeInBytes, cudaMemcpyDeviceToHost, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
         result = cudaFreeAsync(pXDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
         result = cudaFreeAsync(pYDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+        result = cudaFreeAsync(pZDevice, saxpyStream);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        saxpy::HostExecute(a, pXHost, pYHost, solution.data(), size);
     }
 
     result = cudaEventRecord(saxpyComplete, saxpyStream);
@@ -125,23 +144,29 @@ int mainlol()
     result = cudaEventSynchronize(saxpyComplete);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-    // TODO: replace this with a std::equal
-    for (size_t i = 0; i < size; i++)
+    if (std::equal(solution.cbegin(), solution.cend(), pZHost))
     {
-        std::cout << pYHost[i] << " ";
+        MSG_STD_OUT("Host and device saxpy execution results are equal");
     }
-    std::cout << std::endl;
+    else
+    {
+        MSG_STD_ERR("Host and device saxpy execution results are not equal");
+    }
 
-    // TODO: only print errors here. Don't return.
     result = cudaFreeHost(pXHost);
-    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+    DBG_PRINT_ON_CUDA_ERROR(result);
     result = cudaFreeHost(pYHost);
-    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+    DBG_PRINT_ON_CUDA_ERROR(result);
+    result = cudaFreeHost(pZHost);
+    DBG_PRINT_ON_CUDA_ERROR(result);
 
     result = cudaEventDestroy(saxpyComplete);
-    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+    DBG_PRINT_ON_CUDA_ERROR(result);
     result = cudaStreamDestroy(saxpyStream);
-    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+    DBG_PRINT_ON_CUDA_ERROR(result);
+
+    result = cudaDeviceReset();
+    DBG_PRINT_ON_CUDA_ERROR(result);
 
     return cudaSuccess;
 }
