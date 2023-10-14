@@ -57,4 +57,6 @@ namespace debug
                           std::string_view fileName,
                           std::string_view callerName,
                           unsigned int     lineNumber);
+
+    cudaError_t DisplayAsyncCapabilities(int device);
 }

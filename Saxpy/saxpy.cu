@@ -37,7 +37,10 @@ void saxpy::DeviceExecute(const float        a,
         const size_t       maxNeededBpg  = (len + tpb - 1) / tpb;
         const unsigned int bpg           = static_cast<unsigned int>(std::min(maxAllowedBpg, maxNeededBpg));
 
-        DBG_MSG_STD_OUT("Saxpy launch parameters:\n\tLen: ", len, "\n\tTPB: ", tpb, "\n\tBPG: ", bpg);
+        DBG_MSG_STD_OUT("Saxpy launch parameters:\n",
+                        "   Len: ", len, "\n",
+                        "   TPB: ", tpb, "\n",
+                        "   BPG: ", bpg);
 
         Saxpy<<<bpg, tpb, 0, stream>>>(a, pXDevice, pYDevice, pZDevice, len);
     }

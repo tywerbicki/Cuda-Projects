@@ -75,11 +75,14 @@ int main()
         result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocMapped | cudaHostAllocWriteCombined);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        result = cudaHostAlloc(&pYHost, sizeInBytes, cudaHostAllocMapped);
+        result = cudaHostAlloc(&pYHost, sizeInBytes, cudaHostAllocMapped | cudaHostAllocWriteCombined);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        std::fill(pXHost, pXHost + size, 2.0f);
-        std::fill(pYHost, pYHost + size, 1.5f);
+        result = cudaHostAlloc(&pZHost, sizeInBytes, cudaHostAllocMapped);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        std::generate(pXHost, pXHost + size, randFloat);
+        std::generate(pYHost, pYHost + size, randFloat);
 
         result = cudaHostGetDevicePointer(&pXDevice, pXHost, 0);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -87,12 +90,18 @@ int main()
         result = cudaHostGetDevicePointer(&pYDevice, pYHost, 0);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        // saxpy::DeviceExecute(saxpyStream, size, a, pXDevice, pYDevice);
+        result = cudaHostGetDevicePointer(&pZDevice, pZHost, 0);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        saxpy::DeviceExecute(a, pXDevice, pYDevice, pZDevice, size, saxpyStream);
     }
     else
     {
         // If the device is discrete, we will do everything asynchronously with respect to the host.
-        DBG_MSG_STD_OUT("Async memory allocation strategy chosen");
+#ifdef _DEBUG
+        result = debug::DisplayAsyncCapabilities(selectedDevice);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+#endif // _DEBUG
 
         result = cudaMallocAsync(&pXDevice, sizeInBytes, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -133,12 +142,12 @@ int main()
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
         result = cudaFreeAsync(pZDevice, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
-
-        saxpy::HostExecute(a, pXHost, pYHost, solution.data(), size);
     }
 
     result = cudaEventRecord(saxpyComplete, saxpyStream);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    saxpy::HostExecute(a, pXHost, pYHost, solution.data(), size);
 
     // Here is where we synchronize the host with the saxpy device operations.
     result = cudaEventSynchronize(saxpyComplete);

@@ -13,3 +13,23 @@ void debug::DisplayCudaError(const cudaError_t      error,
     std::cerr << "Line: "       << lineNumber << "\n";
     std::cerr << "Error code: " << error      << "\n";
 }
+
+
+cudaError_t debug::DisplayAsyncCapabilities(int device)
+{
+    cudaError_t result                    = cudaSuccess;
+    int         supportsGpuOverlap        = -1;
+    int         supportsConcurrentKernels = -1;
+
+    result = cudaDeviceGetAttribute(&supportsGpuOverlap, cudaDevAttrGpuOverlap, device);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    result = cudaDeviceGetAttribute(&supportsConcurrentKernels, cudaDevAttrConcurrentKernels, device);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    DBG_MSG_STD_OUT("Device ", device, " async capabilities:\n",
+                    "   GPU overlap: ", supportsGpuOverlap, "\n",
+                    "   Concurrent kernels: ", supportsConcurrentKernels);
+
+    return result;
+}
