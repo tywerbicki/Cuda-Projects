@@ -58,5 +58,7 @@ namespace debug
                           std::string_view callerName,
                           unsigned int     lineNumber);
 
+    cudaError_t DisplayUnifiedMemoryCapabilities(int device);
+
     cudaError_t DisplayAsyncCapabilities(int device);
 }

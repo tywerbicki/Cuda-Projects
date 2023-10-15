@@ -70,7 +70,10 @@ int main()
     {
         // If the device is integrated and supports mapped host memory, then we use pinned
         // mapped allocations to entirely remove any copying from host to device and vice versa.
-        DBG_MSG_STD_OUT("Mapped memory allocation strategy chosen");
+#ifdef _DEBUG
+        result = debug::DisplayUnifiedMemoryCapabilities(selectedDevice);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+#endif // _DEBUG
 
         result = cudaHostAlloc(&pXHost, sizeInBytes, cudaHostAllocMapped | cudaHostAllocWriteCombined);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
