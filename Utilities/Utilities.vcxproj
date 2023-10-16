@@ -94,10 +94,12 @@
   <ItemGroup>
     <ClInclude Include="debug.h" />
     <ClInclude Include="device.h" />
+    <ClInclude Include="streamtimer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="debug.cpp" />
     <ClCompile Include="device.cpp" />
+    <ClCompile Include="streamtimer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

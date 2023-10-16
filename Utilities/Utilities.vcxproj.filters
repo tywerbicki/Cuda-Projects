@@ -22,12 +22,18 @@
     <ClInclude Include="device.h">
       <Filter>Cuda\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="streamtimer.h">
+      <Filter>Cuda\Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="debug.cpp">
       <Filter>Cuda\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="device.cpp">
+      <Filter>Cuda\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="streamtimer.cpp">
       <Filter>Cuda\Source Files</Filter>
     </ClCompile>
   </ItemGroup>
