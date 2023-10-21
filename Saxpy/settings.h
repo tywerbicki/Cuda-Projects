@@ -13,7 +13,7 @@ namespace saxpy
     namespace settings
     {
 #ifdef _DEBUG
-        inline extern const MemoryStrategy memoryStrategy = MemoryStrategy::forceAsync;
+        inline extern const MemoryStrategy memoryStrategy = MemoryStrategy::forceMapped;
 #else // _DEBUG
         inline extern const MemoryStrategy memoryStrategy = MemoryStrategy::dynamic;
 #endif // _DEBUG

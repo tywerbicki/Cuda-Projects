@@ -31,8 +31,8 @@ void saxpy::DeviceExecute(const float        a,
 {
     if (len > 0)
     {
-        // NOTE: these values require hw-specific tuning.
-        const unsigned int tpb           = 128;
+        // NOTE: these values require hw and problem-specific tuning.
+        const unsigned int tpb           = 256;
         const size_t       maxAllowedBpg = 256;
         const size_t       maxNeededBpg  = (len + tpb - 1) / tpb;
         const unsigned int bpg           = static_cast<unsigned int>(std::min(maxAllowedBpg, maxNeededBpg));

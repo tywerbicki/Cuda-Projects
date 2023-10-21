@@ -2,12 +2,14 @@
 #include "device.h"
 #include "saxpy.h"
 #include "settings.h"
+#include "streamtimer.h"
 
 #include "cuda_runtime.h"
 
 #include <stdlib.h>
 
 #include <algorithm>
+#include <chrono>
 #include <vector>
 
 
@@ -49,6 +51,9 @@ int main()
 
     result = cudaEventCreate(&saxpyComplete);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    StreamTimer saxpyStreamTimer(saxpyStream);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(saxpyStreamTimer.GetStatus());
 
     std::srand(10);
     const auto randFloat = []() { return static_cast<float>(std::rand()); };
@@ -96,7 +101,13 @@ int main()
         result = cudaHostGetDevicePointer(&pZDevice, pZHost, 0);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
+        result = saxpyStreamTimer.Start();
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
         saxpy::DeviceExecute(a, pXDevice, pYDevice, pZDevice, size, saxpyStream);
+
+        result = saxpyStreamTimer.Stop();
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
     }
     else
     {
@@ -131,7 +142,13 @@ int main()
         result = cudaMallocAsync(&pZDevice, sizeInBytes, saxpyStream);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
+        result = saxpyStreamTimer.Start();
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
         saxpy::DeviceExecute(a, pXDevice, pYDevice, pZDevice, size, saxpyStream);
+
+        result = saxpyStreamTimer.Stop();
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
         result = cudaHostAlloc(&pZHost, sizeInBytes, cudaHostAllocDefault);
         DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
@@ -150,7 +167,11 @@ int main()
     result = cudaEventRecord(saxpyComplete, saxpyStream);
     DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
+    const auto hostSaxpyExecStart = std::chrono::steady_clock::now();
+
     saxpy::HostExecute(a, pXHost, pYHost, solution.data(), size);
+
+    const auto hostSaxpyExecStop = std::chrono::steady_clock::now();
 
     // Here is where we synchronize the host with the saxpy device operations.
     result = cudaEventSynchronize(saxpyComplete);
@@ -165,6 +186,15 @@ int main()
         MSG_STD_ERR("Host and device saxpy execution results are not equal");
     }
 
+    float deviceSaxpyExecTimeInMs = 0.0f;
+
+    result = saxpyStreamTimer.GetElapsedTimeInMs(deviceSaxpyExecTimeInMs);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    MSG_STD_OUT("Saxpy execution times:\n",
+                "   Host:   ", std::chrono::duration_cast<std::chrono::microseconds>(hostSaxpyExecStop - hostSaxpyExecStart), "\n",
+                "   Device: ", deviceSaxpyExecTimeInMs * 1000, "us");
+
     result = cudaFreeHost(pXHost);
     DBG_PRINT_ON_CUDA_ERROR(result);
     result = cudaFreeHost(pYHost);
@@ -175,9 +205,6 @@ int main()
     result = cudaEventDestroy(saxpyComplete);
     DBG_PRINT_ON_CUDA_ERROR(result);
     result = cudaStreamDestroy(saxpyStream);
-    DBG_PRINT_ON_CUDA_ERROR(result);
-
-    result = cudaDeviceReset();
     DBG_PRINT_ON_CUDA_ERROR(result);
 
     return cudaSuccess;
