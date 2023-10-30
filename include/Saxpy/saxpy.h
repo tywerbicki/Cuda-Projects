@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SAXPY_SAXPY_H
+#define SAXPY_SAXPY_H
 
 #include "cuda_runtime.h"
 
@@ -18,3 +19,6 @@ namespace saxpy
                            float* pZHost,
                            size_t len);
 }
+
+
+#endif // SAXPY_SAXPY_H

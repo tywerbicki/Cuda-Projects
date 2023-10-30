@@ -1,4 +1,5 @@
-#pragma once
+#ifndef UTILITIES_DEBUG_H
+#define UTILITIES_DEBUG_H
 
 #include "cuda_runtime.h"
 
@@ -58,7 +59,10 @@ namespace debug
                           std::string_view callerName,
                           unsigned int     lineNumber);
 
-    cudaError_t DisplayUnifiedMemoryCapabilities(int device);
+    [[nodiscard]] cudaError_t DisplayUnifiedMemoryCapabilities(int device);
 
-    cudaError_t DisplayAsyncCapabilities(int device);
+    [[nodiscard]] cudaError_t DisplayAsyncCapabilities(int device);
 }
+
+
+#endif // UTILITIES_DEBUG_H

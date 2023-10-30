@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SETTINGS
+#define SETTINGS
 
 
 namespace saxpy
@@ -19,3 +20,6 @@ namespace saxpy
 #endif // _DEBUG
     }
 }
+
+
+#endif // SETTINGS

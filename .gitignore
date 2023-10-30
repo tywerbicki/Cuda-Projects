@@ -1,5 +1,1 @@
-/x64/
-/RadixSort/x64/
-/Saxpy/x64/
-/Utilities/x64/
-/.vs/
+build/

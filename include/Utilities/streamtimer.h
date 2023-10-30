@@ -1,4 +1,5 @@
-#pragma once
+#ifndef UTILITIES_STREAMTIMER_H
+#define UTILITIES_STREAMTIMER_H
 
 #include "cuda_runtime.h"
 
@@ -22,3 +23,6 @@ public:
 
     [[nodiscard]] cudaError_t GetElapsedTimeInMs(float& elapsedTime) noexcept;
 };
+
+
+#endif // UTILITIES_STREAMTIMER_H
