@@ -3,4 +3,6 @@ add_library(Utilities STATIC
                 device.cpp
                 streamtimer.cpp)
 
-target_link_libraries(Utilities PRIVATE Defaults)
+target_link_libraries(Utilities PRIVATE
+                         HostDefaults
+                         SharedDefaults)

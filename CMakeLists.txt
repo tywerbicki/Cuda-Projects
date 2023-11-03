@@ -7,16 +7,28 @@ set(CMAKE_SUPPRESS_REGENERATION ON)
 
 project(CudaProjects LANGUAGES CUDA CXX)
 
-add_library(Defaults INTERFACE)
+# Target defaults that are shared between CUDA targets and non-CUDA targets.
+add_library(SharedDefaults INTERFACE)
+# Target defaults specific to non-CUDA targets.
+add_library(HostDefaults INTERFACE)
+# Target defaults specific to CUDA targets.
+add_library(CudaDefaults INTERFACE)
 
-# set_target_properties(Defaults PROPERTIES
-#                          CXX_STANDARD 20
-#                          CXX_STANDARD_REQUIRED ON
-#                          CXX_EXTENSIONS OFF)
+target_compile_features(SharedDefaults INTERFACE cxx_std_20)
 
-# set(CMAKE_CXX_STANDARD 20)
+target_compile_definitions(SharedDefaults INTERFACE
+                              $<$<CONFIG:Debug>:_DEBUG>
+                              $<$<CONFIG:Release>:_RELEASE>)
 
-target_compile_features(Defaults INTERFACE cxx_std_20)
+if (MSVC)
+    target_compile_definitions(HostDefaults INTERFACE
+                                  $<$<CONFIG:Debug>:_ALLOW_RTCc_IN_STL>)
+
+    target_compile_options(HostDefaults INTERFACE
+                              /W4 /EHsc
+                              $<$<CONFIG:Debug>:/MDd /Od /Ob0 /RTC1 /RTCc>
+                              $<$<CONFIG:Release>:/MD /O2 /Ob2 /Oi>)
+endif()
 
 add_subdirectory(src)
 add_subdirectory(include)
