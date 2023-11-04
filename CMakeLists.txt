@@ -9,8 +9,6 @@ project(CudaProjects LANGUAGES CUDA CXX)
 
 # Target defaults that are shared between CUDA targets and non-CUDA targets.
 add_library(SharedDefaults INTERFACE)
-# Target defaults specific to non-CUDA targets.
-add_library(HostDefaults INTERFACE)
 # Target defaults specific to CUDA targets.
 add_library(CudaDefaults INTERFACE)
 
@@ -21,13 +19,13 @@ target_compile_definitions(SharedDefaults INTERFACE
                               $<$<CONFIG:Release>:_RELEASE>)
 
 if (MSVC)
-    target_compile_definitions(HostDefaults INTERFACE
-                                  $<$<CONFIG:Debug>:_ALLOW_RTCc_IN_STL>)
+    target_compile_definitions(SharedDefaults INTERFACE
+                                  $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CXX>:_ALLOW_RTCc_IN_STL>>)
 
-    target_compile_options(HostDefaults INTERFACE
-                              /W4 /EHsc
-                              $<$<CONFIG:Debug>:/MDd /Od /Ob0 /RTC1 /RTCc>
-                              $<$<CONFIG:Release>:/MD /O2 /Ob2 /Oi>)
+    target_compile_options(SharedDefaults INTERFACE
+                              $<$<COMPILE_LANGUAGE:CXX>:/W4 /EHsc>
+                              $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CXX>:/MDd /Od /Ob0 /RTC1 /RTCc>>
+                              $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CXX>:/MD /O2 /Ob2 /Oi>>)
 endif()
 
 add_subdirectory(src)
