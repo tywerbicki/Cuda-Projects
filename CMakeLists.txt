@@ -31,8 +31,15 @@ if (MSVC)
                               $<$<COMPILE_LANGUAGE:CXX>:/W4 /EHsc>
                               $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CXX>:/MDd /Od /Ob0 /RTC1 /RTCc>>
                               $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CXX>:/MD /O2 /Ob2 /Oi>>)
+
+    # 1. Always ignore the static C++ runtime libraries.
+    # 2. Conditionally ignore the incorrect DLL runtime library.
+    target_link_options(CudaDefaults INTERFACE
+                           $<HOST_LINK:/NODEFAULTLIB:libcmt.lib /NODEFAULTLIB:libcmtd.lib>
+                           $<$<CONFIG:Debug>:$<HOST_LINK:/NODEFAULTLIB:msvcrt.lib>>
+                           $<$<CONFIG:Release>:$<HOST_LINK:/NODEFAULTLIB:msvcrtd.lib>>)
 else()
-    # TODO: fully support more compilers.
+    # TODO: fully support more compilers and linkers.
     target_compile_options(SharedDefaults INTERFACE
                               $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 endif()
