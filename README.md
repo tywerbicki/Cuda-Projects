@@ -8,9 +8,17 @@ A place for my personal CUDA tinkering to reside. The layout of the repository a
 
 ### Perform Out-Of-Source Build ###
 
-From the repository root, run:
+From the repository root:
 ```
 mkdir build && cd build && cmake ..
+```
+For example, to build *Saxpy* for *Release* on Windows:
+```
+msbuild.exe src\Saxpy\Saxpy.vcxproj /property:Platform=x64 /property:Configuration=Release
+```
+To then run the *Saxpy* executable:
+```
+src\Saxpy\Release\Saxpy.exe
 ```
 
 ---
