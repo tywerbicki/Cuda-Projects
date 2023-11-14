@@ -6,10 +6,11 @@ set(CMAKE_CONFIGURATION_TYPES Debug Release)
 set(CMAKE_SUPPRESS_REGENERATION ON)
 set(CMAKE_SKIP_INSTALL_RULES ON)
 
-set(CMAKE_CUDA_RUNTIME_LIBRARY STATIC)
 set(CMAKE_CUDA_ARCHITECTURES 60 70 80 90)
 
 project(CudaProjects LANGUAGES CUDA CXX)
+
+find_package(CUDAToolkit REQUIRED)
 
 # Target defaults that are shared between CUDA targets and non-CUDA targets.
 add_library(SharedDefaults INTERFACE)
@@ -20,7 +21,10 @@ target_compile_features(SharedDefaults INTERFACE cxx_std_20)
 
 target_compile_definitions(SharedDefaults INTERFACE
                               $<$<CONFIG:Debug>:_DEBUG>
-                              $<$<CONFIG:Release>:_RELEASE>)
+                              $<$<CONFIG:Release>:_RELEASE _OPT_FOR_SPEED>)
+
+target_link_libraries(CudaDefaults INTERFACE
+                         CUDA::cudart_static)
 
 if (MSVC)
     target_compile_definitions(SharedDefaults INTERFACE
@@ -43,10 +47,8 @@ else()
                               $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 endif()
 
-add_subdirectory(src)
-add_subdirectory(include)
-
 include(FetchContent)
+include(GoogleTest)
 
 FetchContent_Declare(googletest
                      GIT_REPOSITORY https://github.com/google/googletest.git
@@ -54,3 +56,17 @@ FetchContent_Declare(googletest
                      EXCLUDE_FROM_ALL)
 
 FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
+add_executable(Tests)
+
+target_link_libraries(Tests PRIVATE
+                         CUDA::cudart_static
+                         GTest::gtest_main
+                         SharedDefaults)
+
+add_subdirectory(src)
+add_subdirectory(include)
+
+gtest_discover_tests(Tests)
