@@ -12,13 +12,13 @@ From the repository root:
 ```
 mkdir build && cd build && cmake ..
 ```
-For example, to build *Saxpy* for *Release* on Windows:
+For example, to build *Tests* for *Release* on Windows:
 ```
-msbuild.exe src\Saxpy\Saxpy.vcxproj /property:Platform=x64 /property:Configuration=Release
+msbuild.exe Tests.vcxproj /property:Platform=x64 /property:Configuration=Release
 ```
-To then run the *Saxpy* executable:
+To then run the *Tests* executable:
 ```
-src\Saxpy\Release\Saxpy.exe
+Release\Tests.exe
 ```
 
 ---
