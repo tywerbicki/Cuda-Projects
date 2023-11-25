@@ -1,3 +1,4 @@
+#include "device.h"
 #include "saxpy.h"
 
 #include "cuda_runtime.h"
@@ -15,13 +16,20 @@ class SaxpyTest : public testing::Test
 protected:
     static void SetUpTestSuite() noexcept
     {
-        cudaError_t result      = cudaSuccess;
-        int         deviceCount = -1;
+        cudaError_t result        = cudaSuccess;
+        int         deviceCount   = -1;
+        int         defaultDevice = -1;
 
         result = cudaGetDeviceCount(&deviceCount);
         ASSERT_EQ(result, cudaSuccess);
 
         ASSERT_GT(deviceCount, 0) << "No CUDA-enabled device was detected";
+
+        result = device::GetMostMultiProcessors(deviceCount, defaultDevice);
+        ASSERT_EQ(result, cudaSuccess);
+
+        result = cudaSetDevice(defaultDevice);
+        ASSERT_EQ(result, cudaSuccess);
 
         // Set seed once for use of SaxpyTest::GetRandFloat
         std::srand(10);
@@ -31,10 +39,10 @@ protected:
     {
         cudaError_t result = cudaSuccess;
 
-        result = cudaStreamCreateWithFlags(&m_saxpyStream, cudaStreamNonBlocking);
+        result = cudaStreamCreateWithFlags(&m_stream, cudaStreamNonBlocking);
         ASSERT_EQ(result, cudaSuccess);
 
-        result = cudaEventCreate(&m_saxpyComplete);
+        result = cudaEventCreate(&m_saxpyExec);
         ASSERT_EQ(result, cudaSuccess);
     }
 
@@ -47,10 +55,10 @@ protected:
     {
         cudaError_t result = cudaSuccess;
 
-        result = cudaEventDestroy(m_saxpyComplete);
+        result = cudaEventDestroy(m_saxpyExec);
         EXPECT_EQ(result, cudaSuccess);
 
-        result = cudaStreamDestroy(m_saxpyStream);
+        result = cudaStreamDestroy(m_stream);
         EXPECT_EQ(result, cudaSuccess);
     }
 
@@ -63,15 +71,14 @@ protected:
     {
         cudaError_t result = cudaSuccess;
 
-        result = cudaEventRecord(m_saxpyComplete, m_saxpyStream);
+        result = cudaEventRecord(m_saxpyExec, m_stream);
         ASSERT_EQ(result, cudaSuccess);
 
         std::vector<float> solution(problemSize);
 
-        saxpy::HostExecute(A, m_pXHost, m_pYHost, solution.data(), problemSize);
+        saxpy::HostExec(A, m_pXHost, m_pYHost, solution.data(), problemSize);
 
-        // Here is where we synchronize the host with the saxpy device operations.
-        result = cudaEventSynchronize(m_saxpyComplete);
+        result = cudaEventSynchronize(m_saxpyExec);
         ASSERT_EQ(result, cudaSuccess);
 
         EXPECT_TRUE(std::equal(solution.cbegin(), solution.cend(), m_pZHost)) <<
@@ -90,14 +97,15 @@ protected:
         EXPECT_EQ(result, cudaSuccess);
     }
 
-    cudaStream_t m_saxpyStream   = nullptr;
-    cudaEvent_t  m_saxpyComplete = nullptr;
-    float*       m_pXHost        = nullptr;
-    float*       m_pYHost        = nullptr;
-    float*       m_pZHost        = nullptr;
-    float*       m_pXDevice      = nullptr;
-    float*       m_pYDevice      = nullptr;
-    float*       m_pZDevice      = nullptr;
+    cudaStream_t m_stream    = nullptr;
+    cudaEvent_t  m_saxpyExec = nullptr;
+
+    float*       m_pXHost    = nullptr;
+    float*       m_pYHost    = nullptr;
+    float*       m_pZHost    = nullptr;
+    float*       m_pXDevice  = nullptr;
+    float*       m_pYDevice  = nullptr;
+    float*       m_pZDevice  = nullptr;
 
     static const std::array<size_t, 6> ProblemSizes;
     static const float                 A;
@@ -118,44 +126,45 @@ TEST_F(SaxpyTest, UsingAsyncDataTransfers)
         cudaError_t  result             = cudaSuccess;
         const size_t problemSizeInBytes = problemSize * sizeof(float);
 
-        result = cudaMallocAsync(&m_pXDevice, problemSizeInBytes, m_saxpyStream);
+        result = cudaHostAlloc(&m_pXHost, problemSizeInBytes, cudaHostAllocDefault);
         ASSERT_EQ(result, cudaSuccess);
 
-        result = cudaHostAlloc(&m_pXHost, problemSizeInBytes, cudaHostAllocDefault);
+        result = cudaMallocAsync(&m_pXDevice, problemSizeInBytes, m_stream);
         ASSERT_EQ(result, cudaSuccess);
 
         std::generate(m_pXHost, m_pXHost + problemSize, GetRandFloat);
 
-        result = cudaMemcpyAsync(m_pXDevice, m_pXHost, problemSizeInBytes, cudaMemcpyHostToDevice, m_saxpyStream);
-        ASSERT_EQ(result, cudaSuccess);
-
-        result = cudaMallocAsync(&m_pYDevice, problemSizeInBytes, m_saxpyStream);
+        result = cudaMemcpyAsync(m_pXDevice, m_pXHost, problemSizeInBytes, cudaMemcpyHostToDevice, m_stream);
         ASSERT_EQ(result, cudaSuccess);
 
         result = cudaHostAlloc(&m_pYHost, problemSizeInBytes, cudaHostAllocDefault);
         ASSERT_EQ(result, cudaSuccess);
 
+        result = cudaMallocAsync(&m_pYDevice, problemSizeInBytes, m_stream);
+        ASSERT_EQ(result, cudaSuccess);
+
         std::generate(m_pYHost, m_pYHost + problemSize, GetRandFloat);
 
-        result = cudaMemcpyAsync(m_pYDevice, m_pYHost, problemSizeInBytes, cudaMemcpyHostToDevice, m_saxpyStream);
+        result = cudaMemcpyAsync(m_pYDevice, m_pYHost, problemSizeInBytes, cudaMemcpyHostToDevice, m_stream);
         ASSERT_EQ(result, cudaSuccess);
 
-        result = cudaMallocAsync(&m_pZDevice, problemSizeInBytes, m_saxpyStream);
+        result = cudaMallocAsync(&m_pZDevice, problemSizeInBytes, m_stream);
         ASSERT_EQ(result, cudaSuccess);
 
-        saxpy::DeviceExecute(A, m_pXDevice, m_pYDevice, m_pZDevice, problemSize, m_saxpyStream);
+        result = saxpy::DeviceLaunchAsync(A, m_pXDevice, m_pYDevice, m_pZDevice, problemSize, m_stream);
+        ASSERT_EQ(result, cudaSuccess);
 
         result = cudaHostAlloc(&m_pZHost, problemSizeInBytes, cudaHostAllocDefault);
         ASSERT_EQ(result, cudaSuccess);
 
-        result = cudaMemcpyAsync(m_pZHost, m_pZDevice, problemSizeInBytes, cudaMemcpyDeviceToHost, m_saxpyStream);
+        result = cudaMemcpyAsync(m_pZHost, m_pZDevice, problemSizeInBytes, cudaMemcpyDeviceToHost, m_stream);
         ASSERT_EQ(result, cudaSuccess);
 
-        result = cudaFreeAsync(m_pXDevice, m_saxpyStream);
+        result = cudaFreeAsync(m_pXDevice, m_stream);
         EXPECT_EQ(result, cudaSuccess);
-        result = cudaFreeAsync(m_pYDevice, m_saxpyStream);
+        result = cudaFreeAsync(m_pYDevice, m_stream);
         EXPECT_EQ(result, cudaSuccess);
-        result = cudaFreeAsync(m_pZDevice, m_saxpyStream);
+        result = cudaFreeAsync(m_pZDevice, m_stream);
         EXPECT_EQ(result, cudaSuccess);
 
         VerifySolution(problemSize);
@@ -173,8 +182,8 @@ TEST_F(SaxpyTest, UsingMappedHostMemory)
 
     cudaDeviceProp prop   = {};
     prop.canMapHostMemory = 1;
-    prop.integrated       = 1;
 
+    // TODO: reconstruct queue after device switch.
     result = cudaChooseDevice(&device, &prop);
     ASSERT_EQ(result, cudaSuccess);
 
@@ -216,7 +225,8 @@ TEST_F(SaxpyTest, UsingMappedHostMemory)
         result = cudaHostGetDevicePointer(&m_pZDevice, m_pZHost, 0);
         ASSERT_EQ(result, cudaSuccess);
 
-        saxpy::DeviceExecute(A, m_pXDevice, m_pYDevice, m_pZDevice, problemSize, m_saxpyStream);
+        result = saxpy::DeviceLaunchAsync(A, m_pXDevice, m_pYDevice, m_pZDevice, problemSize, m_stream);
+        ASSERT_EQ(result, cudaSuccess);
 
         VerifySolution(problemSize);
         

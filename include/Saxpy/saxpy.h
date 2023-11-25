@@ -6,18 +6,18 @@
 
 namespace saxpy
 {
-    void DeviceExecute(      float        a,
-                       const float*       pXDevice,
-                       const float*       pYDevice,
-                             float*       pZDevice,
-                             size_t       len,
-                             cudaStream_t stream);
+    [[nodiscard]] cudaError_t DeviceLaunchAsync(float        a,
+                                                const float* pXDevice,
+                                                const float* pYDevice,
+                                                float*       pZDevice,
+                                                size_t       len,
+                                                cudaStream_t stream);
 
-    void HostExecute(      float  a,
-                     const float* pXHost,
-                     const float* pYHost,
-                           float* pZHost,
-                           size_t len);
+    void HostExec(float        a,
+                  const float* pXHost,
+                  const float* pYHost,
+                  float*       pZHost,
+                  size_t       len);
 }
 
 

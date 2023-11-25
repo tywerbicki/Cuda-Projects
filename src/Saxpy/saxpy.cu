@@ -9,49 +9,68 @@
 __global__ void Saxpy(const float                     a,
                       const float* const __restrict__ pXDevice,
                       const float* const __restrict__ pYDevice,
-                            float* const __restrict__ pZDevice,
+                      float* const       __restrict__ pZDevice,
                       const size_t                    len)
 {
-    unsigned int gridThreadIdx = (blockDim.x * blockIdx.x) + threadIdx.x;
-    unsigned int gridSize      = gridDim.x * blockDim.x;
+    unsigned int globThrIdxX = (blockDim.x * blockIdx.x) + threadIdx.x;
 
-    for (size_t idx = gridThreadIdx; idx < len; idx += gridSize)
+    if (globThrIdxX < len)
     {
-        pZDevice[idx] = (a * pXDevice[idx]) + pYDevice[idx];
+        pZDevice[globThrIdxX] = (a * pXDevice[globThrIdxX]) + pYDevice[globThrIdxX];
     }
 }
 
 
-void saxpy::DeviceExecute(const float        a,
-                          const float* const pXDevice,
-                          const float* const pYDevice,
-                                float* const pZDevice,
-                          const size_t       len,
-                          const cudaStream_t stream)
+cudaError_t saxpy::DeviceLaunchAsync(const float        a,
+                                     const float* const pXDevice,
+                                     const float* const pYDevice,
+                                     float* const       pZDevice,
+                                     const size_t       len,
+                                     const cudaStream_t stream)
 {
+    cudaError_t result = cudaSuccess;
+
     if (len > 0)
     {
-        // NOTE: these values require hw and problem-specific tuning.
-        const unsigned int tpb           = 256;
-        const size_t       maxAllowedBpg = 256;
-        const size_t       maxNeededBpg  = (len + tpb - 1) / tpb;
-        const unsigned int bpg           = static_cast<unsigned int>(std::min(maxAllowedBpg, maxNeededBpg));
+        int device   = -1;
+        int warpSize = -1;
 
-        DBG_MSG_STD_OUT("Saxpy launch parameters:\n",
-                        "   Len: ", len, "\n",
-                        "   TPB: ", tpb, "\n",
-                        "   BPG: ", bpg);
+        result = cudaGetDevice(&device);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
 
-        Saxpy<<<bpg, tpb, 0, stream>>>(a, pXDevice, pYDevice, pZDevice, len);
+        result = cudaDeviceGetAttribute(&warpSize, cudaDevAttrWarpSize, device);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        // NOTE: the multiple of the warp size should be tuned per-hardware.
+        const unsigned int blockDimX = static_cast<unsigned int>(warpSize) * 4;
+
+#ifdef _DEBUG
+        int maxGridDimX = -1;
+
+        result = cudaDeviceGetAttribute(&maxGridDimX, cudaDevAttrMaxGridDimX, device);
+        DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+        if (static_cast<size_t>(maxGridDimX) * static_cast<size_t>(blockDimX) < len)
+        {
+            DBG_MSG_STD_ERR("Saxpy `len` exceeds maximum supported launch parameters: ", len);
+            return cudaErrorInvalidValue;
+        }
+#endif // _DEBUG
+
+        const unsigned int gridDimX = static_cast<unsigned int>((len + blockDimX - 1) / blockDimX);
+
+        Saxpy<<<gridDimX, blockDimX, 0, stream>>>(a, pXDevice, pYDevice, pZDevice, len);
     }
+
+    return result;
 }
 
 
-void saxpy::HostExecute(const float        a,
-                        const float* const pXHost,
-                        const float* const pYHost,
-                              float* const pZHost,
-                        const size_t len)
+void saxpy::HostExec(const float        a,
+                     const float* const pXHost,
+                     const float* const pYHost,
+                     float* const       pZHost,
+                     const size_t       len)
 {
     std::transform(pXHost, pXHost + len,
                    pYHost,
