@@ -6,17 +6,28 @@
 #include <algorithm>
 
 
-__global__ void Saxpy(const float                     a,
-                      const float* const __restrict__ pXDevice,
-                      const float* const __restrict__ pYDevice,
-                      float* const       __restrict__ pZDevice,
-                      const size_t                    len)
+namespace
 {
-    unsigned int globThrIdxX = (blockDim.x * blockIdx.x) + threadIdx.x;
-
-    if (globThrIdxX < len)
+    template<typename T>
+    concept Axpyable = requires(T a, T b)
     {
-        pZDevice[globThrIdxX] = (a * pXDevice[globThrIdxX]) + pYDevice[globThrIdxX];
+        { a + b } -> std::convertible_to<T>;
+        { a * b } -> std::convertible_to<T>;
+    };
+
+    template<Axpyable T>
+    __global__ void Axpy(const T                     a,
+                         const T* const __restrict__ pXDevice,
+                         const T* const __restrict__ pYDevice,
+                         T* const       __restrict__ pZDevice,
+                         const size_t                    len)
+    {
+        unsigned int globThrIdxX = (blockDim.x * blockIdx.x) + threadIdx.x;
+
+        if (globThrIdxX < len)
+        {
+            pZDevice[globThrIdxX] = (a * pXDevice[globThrIdxX]) + pYDevice[globThrIdxX];
+        }
     }
 }
 
@@ -59,7 +70,7 @@ cudaError_t saxpy::DeviceLaunchAsync(const float        a,
 
         const unsigned int gridDimX = static_cast<unsigned int>((len + blockDimX - 1) / blockDimX);
 
-        Saxpy<<<gridDimX, blockDimX, 0, stream>>>(a, pXDevice, pYDevice, pZDevice, len);
+        Axpy<<<gridDimX, blockDimX, 0, stream>>>(a, pXDevice, pYDevice, pZDevice, len);
     }
 
     return result;
