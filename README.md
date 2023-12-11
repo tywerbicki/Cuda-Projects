@@ -23,6 +23,16 @@ Release\Tests.exe
 
 ---
 
+## Exclusive Scan ##
+
+*Work In Progress*. Currently toying around with my exclusive scan implementation using the CUDA *cooperative groups* API.
+
+Given a binary associative operator $\oplus$ with the identity element $\mathbb{i}$ and a contiguous array of *n* elements $\mathbf{A}_n = [a_1, a_2, \ldots, a_n]$:
+
+$$\textrm{Exclusive Scan}(\mathbf{A}_n) = [\mathbb{i}, a_1, a_1 \oplus a_2, a_1 \oplus a_2 \oplus a_3, \ldots, a_1 \oplus a_2 \ldots \oplus a_n-1]$$
+
+---
+
 ## Saxpy ##
 
 The canonical *single-precision ax + y kernel*:
