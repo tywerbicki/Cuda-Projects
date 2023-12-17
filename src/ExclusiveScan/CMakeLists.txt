@@ -3,4 +3,5 @@ add_executable(ExclusiveScan
 
 target_link_libraries(ExclusiveScan PRIVATE
                          CudaDefaults
-                         SharedDefaults)
+                         SharedDefaults
+                         Utilities)

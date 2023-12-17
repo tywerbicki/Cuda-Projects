@@ -1,3 +1,5 @@
+#include "debug.h"
+
 #include <cooperative_groups.h>
 #include <cooperative_groups/scan.h>
 #include <cuda_runtime.h>
@@ -34,20 +36,25 @@ namespace
         assert(pData != nullptr);
         assert(len   <= block.num_threads());
 
-        // 1. Allocate shared memory to hold intermediate results obtained from each warp in the thread block.
-        // 2. The allocation size is conservative - the exact calculation is block.num_threads() / WarpSize.
-        __shared__ T shared[WarpSize];
-
         const cg::thread_block_tile<WarpSize, cg::thread_block> warp = cg::tiled_partition<WarpSize, cg::thread_block>(block);
 
-        // This ensures we can scan the intermediate results with only 1 warp.
-        assert(warp.meta_group_rank() < WarpSize);
+        // 1. Allocate shared memory to hold intermediate results obtained from each warp in the thread block.
+        // 2. The allocation size is conservative to make it static - the exact calculation is `numWritesToShared`,
+        //    which can only be performed dynamically.
+        // 3. This allocation size ensures we can scan the intermediate results with only 1 warp.
+        __shared__ T shared[WarpSize];
+
+        const unsigned int numWritesToShared = (len + warp.num_threads() - 1) / warp.num_threads();
+
+        assert(numWritesToShared <= WarpSize);
 
         T originalVal = {};
         T scannedVal  = {};
 
         if (block.thread_rank() < len)
         {
+            assert(warp.meta_group_rank() < numWritesToShared);
+
             const cg::coalesced_group active = cg::coalesced_threads();
 
             originalVal = pData[block.thread_rank()];
@@ -70,8 +77,6 @@ namespace
 
         if (warp.meta_group_rank() == 0)
         {
-            const unsigned int numWritesToShared = (len + WarpSize - 1) / WarpSize;
-
             if (warp.thread_rank() < numWritesToShared)
             {
                 const cg::coalesced_group active = cg::coalesced_threads();
@@ -134,32 +139,74 @@ namespace
 }
 
 
+template<typename T>
+cudaError_t DeviceLaunchAsync(T* const           pDataDevice,
+                              const size_t       len,
+                              const cudaStream_t stream)
+{
+    cudaError_t result = cudaSuccess;
+
+    const unsigned int blockNumThreads = WarpSize;
+    const unsigned int gridNumBlocks   = static_cast<unsigned int>((len + blockNumThreads - 1) / blockNumThreads);
+
+    // This ensures that the block sums can be scanned by one block.
+#ifdef _DEBUG
+    int device       = -1;
+    int maxBlockDimX = -1;
+
+    result = cudaGetDevice(&device);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    result = cudaDeviceGetAttribute(&maxBlockDimX, cudaDevAttrMaxBlockDimX, device);
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    if (gridNumBlocks > static_cast<unsigned int>(maxBlockDimX))
+    {
+        DBG_MSG_STD_ERR("Launch parameters require blockDim.x be ", gridNumBlocks,
+                        ": max supported is ", maxBlockDimX);
+        return cudaErrorInvalidValue;
+    }
+#endif // _DEBUG
+
+    T* pBlockSumsDevice = nullptr;
+    result = cudaMallocAsync(&pBlockSumsDevice, gridNumBlocks * sizeof(T), stream);
+
+    DBG_PRINT_RETURN_ON_CUDA_ERROR(result);
+
+    ExclusiveScan_Add_grid_kernel<<<gridNumBlocks, blockNumThreads, 0, stream>>>(pDataDevice,
+                                                                                 len,
+                                                                                 pBlockSumsDevice);
+
+    ExclusiveScan_Add_grid_kernel<<<1, gridNumBlocks, 0, stream>>>(pBlockSumsDevice,
+                                                                   static_cast<size_t>(gridNumBlocks),
+                                                                   static_cast<T*>(nullptr));
+
+    DistributeBlockSums_kernel<<<gridNumBlocks, blockNumThreads, 0, stream>>>(pDataDevice,
+                                                                              len,
+                                                                              pBlockSumsDevice);
+
+    result = cudaFreeAsync(pBlockSumsDevice, stream);
+    DBG_PRINT_ON_CUDA_ERROR(result);
+
+    return result;
+}
+
+
 int main()
 {
-    unsigned int data[13] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
-    unsigned int blockSums[4];
+    constexpr size_t len = 17;
+    unsigned int data[len] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
 
     unsigned int* pDataDevice = nullptr;
-    unsigned int* pBlockSums  = nullptr;
     cudaMalloc(&pDataDevice, sizeof(data));
-    cudaMalloc(&pBlockSums, sizeof(blockSums));
 
     cudaMemcpy(pDataDevice, data, sizeof(data), cudaMemcpyHostToDevice);
 
-    ExclusiveScan_Add_grid_kernel<<<4, 4>>>(pDataDevice, 13, pBlockSums);
-    ExclusiveScan_Add_grid_kernel<<<1, 4>>>(pBlockSums, 4, (unsigned int*)0);
-    DistributeBlockSums_kernel<<<4, 4>>>(pDataDevice, 13, pBlockSums);
+    DeviceLaunchAsync(pDataDevice, len, (cudaStream_t)0);
 
     cudaMemcpy(data, pDataDevice, sizeof(data), cudaMemcpyDeviceToHost);
-    cudaMemcpy(blockSums, pBlockSums, sizeof(blockSums), cudaMemcpyDeviceToHost);
 
     for (const auto i : data)
-    {
-        std::cout << i << " ";
-    }
-    std::cout << std::endl;
-
-    for (const auto i : blockSums)
     {
         std::cout << i << " ";
     }
