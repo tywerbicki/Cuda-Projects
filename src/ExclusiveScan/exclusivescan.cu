@@ -4,18 +4,36 @@
 
 #include <iostream>
 #include <stdio.h>
+#include <type_traits>
 
 namespace cg = cooperative_groups;
 
 
 namespace
 {
+    template<typename T>
+    concept IsoAddable = requires(T a, T b)
+    {
+        { a + b } -> std::convertible_to<T>;
+    };
+
     constexpr unsigned int WarpSize = 4;
 
 
     template<typename T, typename F>
-    __device__ void ExclusiveScan_block_kernel(const cg::thread_block& block, T* const pData, F&& op, T* const pBlockSum)
+        requires std::is_trivially_copyable_v<T> &&
+                 std::is_copy_assignable_v<T>    &&
+                 (sizeof(T) <= 32)               &&
+                 std::is_invocable_v<F, T, T>
+    __device__ void ExclusiveScan_block_kernel(const cg::thread_block& block,
+                                               T* const                pData,
+                                               const unsigned int      len,
+                                               F&&                     op,
+                                               T* const                pBlockResult)
     {
+        assert(pData != nullptr);
+        assert(len   <= block.num_threads());
+
         // 1. Allocate shared memory to hold intermediate results obtained from each warp in the thread block.
         // 2. The allocation size is conservative - the exact calculation is block.num_threads() / WarpSize.
         __shared__ T shared[WarpSize];
@@ -25,52 +43,101 @@ namespace
         // This ensures we can scan the intermediate results with only 1 warp.
         assert(warp.meta_group_rank() < WarpSize);
 
-        const T originalVal = pData[block.thread_rank()];
-        const T scannedVal  = cg::exclusive_scan(warp, originalVal, op);
+        T originalVal = {};
+        T scannedVal  = {};
 
-        printf("Scanned val: %u\n", scannedVal);
-
-        if (warp.thread_rank() + 1 == warp.num_threads())
+        if (block.thread_rank() < len)
         {
-            shared[warp.meta_group_rank()] = scannedVal + originalVal;
+            const cg::coalesced_group active = cg::coalesced_threads();
+
+            originalVal = pData[block.thread_rank()];
+            scannedVal  = cg::exclusive_scan(active, originalVal, op);
+
+            printf("Scanned val: %u\n", scannedVal);
+
+            if (active.thread_rank() + 1 == active.num_threads())
+            {
+                shared[warp.meta_group_rank()] = op(scannedVal, originalVal);
+            }
         }
 
         block.sync();
 
-        if ((block.thread_rank() + 1 == block.num_threads()) && pBlockSum)
+        if ((block.thread_rank() + 1 == len) && pBlockResult)
         {
-            *pBlockSum = scannedVal + originalVal;
+            *pBlockResult = op(scannedVal, originalVal);
         }
 
         if (warp.meta_group_rank() == 0)
         {
-            shared[warp.thread_rank()] = cg::exclusive_scan(warp, shared[warp.thread_rank()], op);
+            const unsigned int numWritesToShared = (len + WarpSize - 1) / WarpSize;
+
+            if (warp.thread_rank() < numWritesToShared)
+            {
+                const cg::coalesced_group active = cg::coalesced_threads();
+
+                shared[active.thread_rank()] = cg::exclusive_scan(active, shared[active.thread_rank()], op);
+            }
         }
 
         block.sync();
 
-        pData[block.thread_rank()] = shared[warp.meta_group_rank()] + scannedVal;
+        if (block.thread_rank() < len)
+        {
+            pData[block.thread_rank()] = op(shared[warp.meta_group_rank()], scannedVal);
+        }
     }
 
 
     template<typename T>
-    __global__ void ExclusiveScan_Add_grid_kernel(T* const pData, T* const pBlockSums)
+    __global__ void ExclusiveScan_Add_grid_kernel(T* const pData, const size_t len, T* const pBlockSums)
     {
+        assert(pData != nullptr);
+
         const cg::grid_group   grid  = cg::this_grid();
         const cg::thread_block block = cg::this_thread_block();
 
-        ExclusiveScan_block_kernel(block,
-                                   &pData[grid.block_rank() * block.num_threads()],
-                                   cg::plus<T>(),
-                                   pBlockSums ? &pBlockSums[grid.block_rank()] : pBlockSums);
+        assert(len <= grid.num_threads());
+
+        const size_t blockBaseGlobalThrIdx = static_cast<size_t>(grid.block_rank()) *
+                                             static_cast<size_t>(block.num_threads());
+
+        // This ensures that too many blocks weren't launched.
+        assert(len > blockBaseGlobalThrIdx);
+
+        T* const           pBlockData = pData + blockBaseGlobalThrIdx;
+        const unsigned int blockLen   = static_cast<unsigned int>( min(static_cast<size_t>(block.num_threads()),
+                                                                       len - blockBaseGlobalThrIdx) );
+        T* const           pBlockSum  = pBlockSums ? pBlockSums + grid.block_rank() : nullptr;
+
+        ExclusiveScan_block_kernel(block, pBlockData, blockLen, cg::plus<T>(), pBlockSum);
+    }
+
+
+    template<typename T>
+        requires IsoAddable<T> &&
+                 std::is_copy_assignable_v<T>
+    __global__ void DistributeBlockSums_kernel(T* const pData, const size_t len, const T* const pBlockSums)
+    {
+        assert(pData      != nullptr);
+        assert(pBlockSums != nullptr);
+
+        const cg::grid_group grid = cg::this_grid();
+
+        assert(len <= grid.num_threads());
+
+        if (grid.thread_rank() < len)
+        {
+            pData[grid.thread_rank()] += pBlockSums[grid.block_rank()];
+        }
     }
 }
 
 
 int main()
 {
-    unsigned int data[12] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-    unsigned int blockSums[3];
+    unsigned int data[13] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+    unsigned int blockSums[4];
 
     unsigned int* pDataDevice = nullptr;
     unsigned int* pBlockSums  = nullptr;
@@ -79,8 +146,9 @@ int main()
 
     cudaMemcpy(pDataDevice, data, sizeof(data), cudaMemcpyHostToDevice);
 
-    ExclusiveScan_Add_grid_kernel<<<3, 4>>>(pDataDevice, pBlockSums);
-    ExclusiveScan_Add_grid_kernel<<<1, 4>>>(pBlockSums, (unsigned int*)0);
+    ExclusiveScan_Add_grid_kernel<<<4, 4>>>(pDataDevice, 13, pBlockSums);
+    ExclusiveScan_Add_grid_kernel<<<1, 4>>>(pBlockSums, 4, (unsigned int*)0);
+    DistributeBlockSums_kernel<<<4, 4>>>(pDataDevice, 13, pBlockSums);
 
     cudaMemcpy(data, pDataDevice, sizeof(data), cudaMemcpyDeviceToHost);
     cudaMemcpy(blockSums, pBlockSums, sizeof(blockSums), cudaMemcpyDeviceToHost);
