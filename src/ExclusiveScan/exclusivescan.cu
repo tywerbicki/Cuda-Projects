@@ -23,6 +23,40 @@ namespace
 
 
     template<typename T, typename F>
+    __device__ void ExclusiveScan_warp_kernel(const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
+                                              T* const    pData,
+                                              F&&         op)
+    {
+        // Work in progress
+
+        T firstVal        = pData[warp.thread_rank()];
+        T scannedFirstVal = cg::exclusive_scan(warp, firstVal, op);
+
+        pData[warp.thread_rank()] = scannedFirstVal;
+
+        T resultForNext = warp.shfl(op(scannedFirstVal, firstVal), warp.num_threads() - 1);
+
+        T secondVal        = pData[warp.num_threads() + warp.thread_rank()];
+        T scannedsecondVal = op(resultForNext, cg::exclusive_scan(warp, secondVal, op));
+
+        // firstVal        = secondVal;
+        // scannedFirstVal = scannedsecondVal;
+
+        pData[warp.num_threads() + warp.thread_rank()] = scannedsecondVal;
+    }
+
+    // TODO: delete this temp. kernel when not needed.
+    template<typename T>
+    __global__ void WarpTest(T* const pData)
+    {
+        const cg::thread_block block = cg::this_thread_block();
+        const auto warp = cg::tiled_partition<WarpSize, cg::thread_block>(block);
+
+        ExclusiveScan_warp_kernel(warp, pData, cg::plus<T>());
+    }
+
+
+    template<typename T, typename F>
         requires std::is_trivially_copyable_v<T> &&
                  std::is_copy_assignable_v<T>    &&
                  (sizeof(T) <= 32)               &&
@@ -202,7 +236,8 @@ int main()
 
     cudaMemcpy(pDataDevice, data, sizeof(data), cudaMemcpyHostToDevice);
 
-    DeviceLaunchAsync(pDataDevice, len, (cudaStream_t)0);
+    // DeviceLaunchAsync(pDataDevice, len, (cudaStream_t)0);
+    WarpTest<<<1, WarpSize>>>(pDataDevice);
 
     cudaMemcpy(data, pDataDevice, sizeof(data), cudaMemcpyDeviceToHost);
 
