@@ -21,39 +21,7 @@ namespace
 
     constexpr unsigned int WarpSize = 4;
 
-
-    template<typename T, typename F>
-    __device__ void ExclusiveScan_warp_kernel(const cg::thread_block_tile<WarpSize, cg::thread_block>& warp,
-                                              T* const    pData,
-                                              F&&         op)
-    {
-        // Work in progress
-
-        T firstVal        = pData[warp.thread_rank()];
-        T scannedFirstVal = cg::exclusive_scan(warp, firstVal, op);
-
-        pData[warp.thread_rank()] = scannedFirstVal;
-
-        T resultForNext = warp.shfl(op(scannedFirstVal, firstVal), warp.num_threads() - 1);
-
-        T secondVal        = pData[warp.num_threads() + warp.thread_rank()];
-        T scannedsecondVal = op(resultForNext, cg::exclusive_scan(warp, secondVal, op));
-
-        // firstVal        = secondVal;
-        // scannedFirstVal = scannedsecondVal;
-
-        pData[warp.num_threads() + warp.thread_rank()] = scannedsecondVal;
-    }
-
-    // TODO: delete this temp. kernel when not needed.
-    template<typename T>
-    __global__ void WarpTest(T* const pData)
-    {
-        const cg::thread_block block = cg::this_thread_block();
-        const auto warp = cg::tiled_partition<WarpSize, cg::thread_block>(block);
-
-        ExclusiveScan_warp_kernel(warp, pData, cg::plus<T>());
-    }
+    using Warp = cg::thread_block_tile<WarpSize, cg::thread_block>;
 
 
     template<typename T, typename F>
@@ -70,20 +38,21 @@ namespace
         assert(pData != nullptr);
         assert(len   <= block.num_threads());
 
-        const cg::thread_block_tile<WarpSize, cg::thread_block> warp = cg::tiled_partition<WarpSize, cg::thread_block>(block);
+        const Warp warp = cg::tiled_partition<Warp::num_threads(), cg::thread_block>(block);
 
         // 1. Allocate shared memory to hold intermediate results obtained from each warp in the thread block.
         // 2. The allocation size is conservative to make it static - the exact calculation is `numWritesToShared`,
         //    which can only be performed dynamically.
         // 3. This allocation size ensures we can scan the intermediate results with only 1 warp.
-        __shared__ T shared[WarpSize];
+        __shared__ T shared[warp.num_threads()];
 
         const unsigned int numWritesToShared = (len + warp.num_threads() - 1) / warp.num_threads();
 
-        assert(numWritesToShared <= WarpSize);
+        assert(numWritesToShared <= warp.num_threads());
 
         T originalVal = {};
         T scannedVal  = {};
+        T warpResult  = {};
 
         if (block.thread_rank() < len)
         {
@@ -94,11 +63,10 @@ namespace
             originalVal = pData[block.thread_rank()];
             scannedVal  = cg::exclusive_scan(active, originalVal, op);
 
-            printf("Scanned val: %u\n", scannedVal);
-
             if (active.thread_rank() + 1 == active.num_threads())
             {
-                shared[warp.meta_group_rank()] = op(scannedVal, originalVal);
+                warpResult = op(scannedVal, originalVal);
+                shared[warp.meta_group_rank()] = warpResult;
             }
         }
 
@@ -106,17 +74,18 @@ namespace
 
         if ((block.thread_rank() + 1 == len) && pBlockResult)
         {
-            *pBlockResult = op(scannedVal, originalVal);
+            assert(warp.meta_group_rank() + 1 == numWritesToShared);
+
+            *pBlockResult = warpResult;
         }
 
-        if (warp.meta_group_rank() == 0)
+        if (block.thread_rank() < numWritesToShared)
         {
-            if (warp.thread_rank() < numWritesToShared)
-            {
-                const cg::coalesced_group active = cg::coalesced_threads();
+            assert(warp.meta_group_rank() == 0);
 
-                shared[active.thread_rank()] = cg::exclusive_scan(active, shared[active.thread_rank()], op);
-            }
+            const cg::coalesced_group active = cg::coalesced_threads();
+
+            shared[active.thread_rank()] = cg::exclusive_scan(active, shared[active.thread_rank()], op);
         }
 
         block.sync();
@@ -145,8 +114,9 @@ namespace
         assert(len > blockBaseGlobalThrIdx);
 
         T* const           pBlockData = pData + blockBaseGlobalThrIdx;
-        const unsigned int blockLen   = static_cast<unsigned int>( min(static_cast<size_t>(block.num_threads()),
-                                                                       len - blockBaseGlobalThrIdx) );
+        const unsigned int blockLen   = static_cast<unsigned int>(
+            min(static_cast<size_t>(block.num_threads()), len - blockBaseGlobalThrIdx)
+        );
         T* const           pBlockSum  = pBlockSums ? pBlockSums + grid.block_rank() : nullptr;
 
         ExclusiveScan_block_kernel(block, pBlockData, blockLen, cg::plus<T>(), pBlockSum);
@@ -236,8 +206,7 @@ int main()
 
     cudaMemcpy(pDataDevice, data, sizeof(data), cudaMemcpyHostToDevice);
 
-    // DeviceLaunchAsync(pDataDevice, len, (cudaStream_t)0);
-    WarpTest<<<1, WarpSize>>>(pDataDevice);
+    DeviceLaunchAsync(pDataDevice, len, (cudaStream_t)0);
 
     cudaMemcpy(data, pDataDevice, sizeof(data), cudaMemcpyDeviceToHost);
 
