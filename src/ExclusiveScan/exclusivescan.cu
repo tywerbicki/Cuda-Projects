@@ -2,6 +2,7 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/scan.h>
+#include <cub/cub.cuh>
 #include <cuda_runtime.h>
 
 #include <iostream>
@@ -22,6 +23,27 @@ namespace
     constexpr unsigned int WarpSize = 4;
 
     using Warp = cg::thread_block_tile<WarpSize, cg::thread_block>;
+
+
+    template<int      BLOCK_DIM_X,
+             int      ITEMS_PER_THREAD,
+             typename InputIteratorT>
+    __global__ void GlobalLoadExperiment_kernel(InputIteratorT iter)
+    {
+        using InputT = typename std::iterator_traits<InputIteratorT>::value_type;
+
+        typedef cub::BlockLoad<InputT, BLOCK_DIM_X, ITEMS_PER_THREAD, cub::BLOCK_LOAD_TRANSPOSE> BlockLoad;
+
+        __shared__ typename BlockLoad::TempStorage tmpStorage;
+        InputT pvtData[ITEMS_PER_THREAD];
+
+        BlockLoad(tmpStorage).Load(iter, pvtData);
+
+        for (size_t i = 0; i < ITEMS_PER_THREAD; i++)
+        {
+            printf("Thread %u: %u \n", threadIdx.x, pvtData[i]);
+        }
+    }
 
 
     template<typename T, typename F>
@@ -198,15 +220,16 @@ cudaError_t DeviceLaunchAsync(T* const           pDataDevice,
 
 int main()
 {
-    constexpr size_t len = 17;
-    unsigned int data[len] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+    constexpr size_t len = 18;
+    unsigned int data[len] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18};
 
     unsigned int* pDataDevice = nullptr;
     cudaMalloc(&pDataDevice, sizeof(data));
 
     cudaMemcpy(pDataDevice, data, sizeof(data), cudaMemcpyHostToDevice);
 
-    DeviceLaunchAsync(pDataDevice, len, (cudaStream_t)0);
+    // DeviceLaunchAsync(pDataDevice, len, (cudaStream_t)0);
+    GlobalLoadExperiment_kernel<4, 4><<<1, 4>>>(pDataDevice);
 
     cudaMemcpy(data, pDataDevice, sizeof(data), cudaMemcpyDeviceToHost);
 
